@@ -2,12 +2,12 @@
 search items, spells, &amp; make a database
 /peggaid -- opens/closes window
 
-![peggid2](https://github.com/user-attachments/assets/6ebfed2a-77eb-4f84-99e8-6f9db6ec6![peggaid4](https://github.com/user-attachments/assets/3d2cb09f-17b0-4133-ac96-602981bd36ab)
-d92)
+![peggaid4](https://github.com/user-attachments/assets/e4cf2452-79c4-4b36-85fb-e868b91913bd)
+
 
 ![peggid1](https://github.com/user-attachments/assets/7c7052d9-e4ce-4c1c-88a9-0395d75207f1)
 
-![peggaid3](https://github.com/user-attachments/assets/5af3550c-2d7b-435b-ada0-7af367663228)
+
 PeggaID is a World of Warcraft addon designed to help players easily identify and search for item and spell IDs.
 
 This addon provides a user-friendly interface that allows players to quickly find the IDs of items and spells, making it an essential tool for players who need to reference these IDs for various purposes, such as creating macros, scripts, or simply for informational purposes.

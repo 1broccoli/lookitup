@@ -4,7 +4,11 @@ search items, spells, &amp; make a database
 
 ![peggaid4](https://github.com/user-attachments/assets/e4cf2452-79c4-4b36-85fb-e868b91913bd)
 
-![liu](https://github.com/user-attachments/assets/85fd44af-1135-4d90-950f-c8459e8596ef)
+
+![liu100](https://github.com/user-attachments/assets/bbc40d12-dafb-497e-9361-eae52681bae7)
+
+
+![sfs](https://github.com/user-attachments/assets/fe9b1f9e-ec91-4bdf-a68e-0f2b58e18fc0)
 
 
 

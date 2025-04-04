@@ -2,8 +2,9 @@
 ## Title: |cffff8000Lookitup|r
 ## Notes: An addon for managing and searching item and spell IDs.
 ## Author: |cffe6cc80Pegga|r (|cff1eff00Broccoli|r)
-## Version: 1.3
+## Version: 2.0
 ## Website: https://github.com/1broccoli?tab=repositories
 ## SavedVariables: dbSavedVariables
 
 Lookitup.lua
+data\db.lua

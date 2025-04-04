@@ -1,4 +1,8 @@
--- WoWA Classic Addon: Lookitup
+--- To be added, New Item ID or Spell ID with tool tip to add to the database
+--- Add objects database
+--- adding items/spells/models manually
+--- show model id
+--- quest ids
 
 local AddonName, Addon = ...
 Addon.db = {}
@@ -6,7 +10,34 @@ Addon.db = {}
 -- Saved variables
 dbSavedVariables = dbSavedVariables or { items = {}, spells = {}, lastCheckbox = "item", debug = false }
 
-local QUALITY_COLORS = {
+-- Load the database from Lookitup\data\db.lua
+local dbFilePath = "Interface\\AddOns\\Lookitup\\data\\db.lua"
+local dbData, loadError = pcall(dofile, dbFilePath)
+if dbData then
+    if type(loadError) == "table" then
+        dbSavedVariables.items = loadError.items or {}
+        dbSavedVariables.spells = loadError.spells or {}
+    else
+        print("|cffff0000[Lookitup]: Error executing database file:|r", loadError or "Unknown error")
+    end
+else
+    print("|cffff0000[Lookitup]: Failed to load database file:|r", loadError or "Unknown error")
+end
+
+-- Ensure the database is loaded
+if not dbSavedVariables then
+    dbSavedVariables = { items = {}, spells = {}, lastCheckbox = "item", debug = false }
+end
+
+-- Check if the db.lua file has defined items and spells
+if db and db.items and db.spells then
+    dbSavedVariables.items = db.items
+    dbSavedVariables.spells = db.spells
+else
+    print("|cffff0000[Lookitup]: Failed to load database.|r")
+end
+
+local QUALITY_COLORS = QUALITY_COLORS or {
     [0] = "|cff9d9d9d", -- Poor (Gray)
     [1] = "|cffffffff", -- Common (White)
     [2] = "|cff1eff00", -- Uncommon (Green)
@@ -16,7 +47,7 @@ local QUALITY_COLORS = {
     [6] = "|cffe6cc80", -- Artifact (Beige-Gold)
 }
 
-local QUALITY_OPTIONS = {
+local QUALITY_OPTIONS = QUALITY_OPTIONS or {
     { value = "ALL", text = "|cffffffffALL|r" },
     { value = 0, text = QUALITY_COLORS[0] .. "Poor|r" },
     { value = 1, text = QUALITY_COLORS[1] .. "Common|r" },
@@ -27,7 +58,7 @@ local QUALITY_OPTIONS = {
     { value = 6, text = QUALITY_COLORS[6] .. "Artifact|r" },
 }
 
-local currentFilter = "ALL"
+local currentFilter = currentFilter or "ALL"
 
 -- Debug function
 local function DebugPrint(message)
@@ -90,15 +121,12 @@ end
 local frame = CreateFrame("Frame", "LookitupFrame", UIParent, "BackdropTemplate")
 frame:SetSize(500, 600)
 frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)  -- Adjust the point and offsets as needed
-
 frame:SetBackdrop({
     bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
-    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-    tile = true,
-    tileSize = 32,
-    edgeSize = 32,
-    insets = { left = 8, right = 8, top = 8, bottom = 8 },
+    edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+    edgeSize = 16,
 })
+
 frame:SetBackdropColor(0, 0, 0, 1) -- Set initial backdrop transparency
 frame:SetBackdropBorderColor(0, 0, 0, 1) -- Set border color to black
 frame:SetMovable(true) -- Make the frame movable
@@ -121,7 +149,7 @@ frame.title:SetFont("Fonts\\FRIZQT__.TTF", 16)
 local closeTexture = frame:CreateTexture(nil, "ARTWORK")
 closeTexture:SetSize(22, 22)
 closeTexture:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -10, -7)
-closeTexture:SetTexture("Interface\\AddOns\\RaidLockouts\\close.png")
+closeTexture:SetTexture("Interface\\AddOns\\Lookitup\\textures\\close.png")
 closeTexture:SetTexCoord(0, 1, 0, 1)
 
 -- Add highlighting and clicking features to the close texture
@@ -136,6 +164,25 @@ closeTexture:SetScript("OnMouseUp", function(self, button)
         frame:Hide()
     end
 end)
+
+-- Function to update the pagination buttons
+local function UpdatePaginationButtons()
+    if not leftButton or not rightButton then
+        return -- Exit early if buttons are not created
+    end
+
+    -- Ensure currentPage and totalPages are valid
+    currentPage = currentPage or 1
+    totalPages = totalPages or 1
+
+    if not currentPage or not totalPages then
+        return
+    end
+
+    -- Enable or disable buttons based on the current page
+    leftButton:SetEnabled(currentPage > 1)
+    rightButton:SetEnabled(currentPage < totalPages)
+end
 
 -- Checkboxes
 local itemCheckbox = CreateFrame("CheckButton", nil, frame, "UICheckButtonTemplate")
@@ -201,87 +248,29 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
         self:UnregisterEvent("ADDON_LOADED")
     end
 end)
+local resultsPerPage = resultsPerPage or 100 -- Default to 100 results per page
+local currentPage = currentPage or 1
+local totalPages = totalPages or 1
+local results = results or {}
 
--- Search Box
-local searchBox = CreateFrame("EditBox", nil, frame, "BackdropTemplate")
-searchBox:SetSize(350, 20)
-searchBox:SetPoint("TOPLEFT", frame, "TOPLEFT", 20, -80) -- Adjusted position
-searchBox:SetAutoFocus(false)
-searchBox:SetFontObject("GameFontHighlight")
-searchBox:SetBackdrop({
-    bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
-    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-    tile = true,
-    tileSize = 15,
-    edgeSize = 15,
-    insets = { left = 0, right = 0, top = 0, bottom = 0 }, -- Fill to the insets
-})
-searchBox:SetBackdropColor(0, 0, 0, 1)
-searchBox:SetBackdropBorderColor(0, 0, 0, 1)
-
--- Unfocus the search box when ESC is pressed
-searchBox:SetScript("OnEscapePressed", function(self)
-    self:ClearFocus()
-end)
-
+-- Create the results count text
+local resultsCountText = resultsCountText or frame:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+resultsCountText:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 50, 10) -- Adjusted position
+resultsCountText:SetText("")
 
 -- Scroll Frame
 local scrollFrame = CreateFrame("ScrollFrame", nil, frame, "UIPanelScrollFrameTemplate")
 scrollFrame:SetSize(450, 400)
 scrollFrame:SetPoint("TOPLEFT", frame, "TOPLEFT", 10, -120)
 
-local content = CreateFrame("Frame", nil, scrollFrame)
+local content = content or CreateFrame("Frame", nil, scrollFrame)
 content:SetSize(450, 1)
 scrollFrame:SetScrollChild(content)
 
--- Dropdown for Quality
-local qualityDropdown = CreateFrame("Frame", "QualityDropdown", frame, "UIDropDownMenuTemplate")
-qualityDropdown:SetPoint("LEFT", itemCheckbox, "RIGHT", 50, -3)
-
-UIDropDownMenu_SetWidth(qualityDropdown, 100)
-UIDropDownMenu_Initialize(qualityDropdown, function(self, level, menuList)
-    for _, option in ipairs(QUALITY_OPTIONS) do
-        local info = UIDropDownMenu_CreateInfo()
-        info.text = option.text
-        info.value = option.value
-        info.func = function()
-            currentFilter = option.value
-            UIDropDownMenu_SetSelectedValue(qualityDropdown, option.value)
-        end
-        UIDropDownMenu_AddButton(info)
-    end
-end)
-
-UIDropDownMenu_SetSelectedValue(qualityDropdown, "ALL")
-
--- Helper function to update item quality
-local function UpdateItemQuality(line, itemID)
-    local qualityColor = QUALITY_COLORS[select(3, GetItemInfo(itemID))] or "|cffffffff"
-    line.text:SetText(qualityColor .. line.text:GetText() .. "|r")
-end
-
-local resultsPerPage = 100
-local currentPage = 1
-local totalPages = 1
-local results = {}
-
-local resultsCountText = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-resultsCountText:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 50, 10) -- Adjusted position
-resultsCountText:SetText("")
-
 -- Page Indicator
-local pageIndicator = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+local pageIndicator = pageIndicator or frame:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
 pageIndicator:SetPoint("BOTTOM", frame, "BOTTOM", 0, 10)
 pageIndicator:SetText("Page 1 / 1")
-
--- Function to update the pagination buttons
-local function UpdatePaginationButtons()
-    if not currentPage or not totalPages then
-        leftButton.texture:SetVertexColor(0.5, 0.5, 0.5) -- Gray out the button
-        rightButton.texture:SetVertexColor(0.5, 0.5, 0.5) -- Gray out the button
-        return
-    end
-end
 
 local function UpdateResultsDisplay(isItem)
     -- Clear previous results
@@ -382,14 +371,99 @@ local function UpdateResultsDisplay(isItem)
     UpdatePaginationButtons()
 end
 
+-- Search Box
+local searchBox = CreateFrame("EditBox", nil, frame, "BackdropTemplate")
+searchBox:SetSize(350, 20)
+searchBox:SetPoint("TOPLEFT", frame, "TOPLEFT", 20, -80) -- Adjusted position
+searchBox:SetAutoFocus(false)
+searchBox:SetFontObject("GameFontHighlight")
+searchBox:SetBackdrop({
+    bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+    tile = true,
+    tileSize = 15,
+    edgeSize = 15,
+    insets = { left = 0, right = 0, top = 0, bottom = 0 }, -- Fill to the insets
+})
+searchBox:SetBackdropColor(0, 0, 0, 1)
+searchBox:SetBackdropBorderColor(0, 0, 0, 1)
+
+-- Unfocus the search box when ESC is pressed
+searchBox:SetScript("OnEscapePressed", function(self)
+    self:ClearFocus()
+end)
+
+searchBox:SetScript("OnTextChanged", function(self, userInput)
+    if not userInput then return end -- Ignore programmatic changes
+    local query = self:GetText()
+    local isItem = itemCheckbox:GetChecked()
+
+    if query == "" then
+        results = {}
+        resultsCountText:SetText("No results found.")
+        pageIndicator:SetText("Page 1 / 1")
+        currentPage = 1
+        totalPages = 1
+        UpdatePaginationButtons()
+        UpdateResultsDisplay(isItem)
+        return
+    end
+
+    -- Perform search in the local database
+    results = SearchDatabase(query, isItem)
+
+    -- Update results display
+    totalPages = math.ceil(#results / resultsPerPage)
+    currentPage = 1
+    UpdateResultsDisplay(isItem)
+end)
+
+-- Dropdown for Quality
+local qualityDropdown = CreateFrame("Frame", "QualityDropdown", frame, "UIDropDownMenuTemplate")
+qualityDropdown:SetPoint("LEFT", itemCheckbox, "RIGHT", 50, -3)
+
+UIDropDownMenu_SetWidth(qualityDropdown, 100)
+UIDropDownMenu_Initialize(qualityDropdown, function(self, level, menuList)
+    for _, option in ipairs(QUALITY_OPTIONS) do
+        local info = UIDropDownMenu_CreateInfo()
+        info.text = option.text
+        info.value = option.value
+        info.func = function()
+            currentFilter = option.value
+            UIDropDownMenu_SetSelectedValue(qualityDropdown, option.value)
+        end
+        UIDropDownMenu_AddButton(info)
+    end
+end)
+
+UIDropDownMenu_SetSelectedValue(qualityDropdown, "ALL")
+
+-- Helper function to update item quality
+function UpdateItemQuality(line, itemID)
+    local qualityColor = QUALITY_COLORS[select(3, GetItemInfo(itemID))] or "|cffffffff"
+    if line and line.text then
+        line.text:SetText(qualityColor .. line.text:GetText() .. "|r")
+    end
+end
+
+-- Create the results count text
+local resultsCountText = resultsCountText or frame:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+resultsCountText:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 50, 10) -- Adjusted position
+resultsCountText:SetText("")
+
+-- Page Indicator
+local pageIndicator = pageIndicator or frame:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+pageIndicator:SetPoint("BOTTOM", frame, "BOTTOM", 0, 10)
+pageIndicator:SetText("Page 1 / 1")
+
 -- Create pagination buttons
-local leftButton = CreateFrame("Button", nil, frame)
+local leftButton = leftButton or CreateFrame("Button", nil, frame)
 leftButton:SetSize(32, 32)
 leftButton:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 10, 10)
 leftButton.texture = leftButton:CreateTexture(nil, "ARTWORK")
 leftButton.texture:SetAllPoints()
-leftButton.texture:SetTexture("Interface\\AddOns\\Lookitup\\left.png")
-leftButton.texture:SetVertexColor(1, 1, 1) -- Initially gray out the button
+leftButton.texture:SetTexture("Interface\\AddOns\\Lookitup\\textures\\left.png") -- Ensure the texture path is correct
+leftButton.texture:SetVertexColor(0.5, 0.5, 0.5) -- Initially gray out the button
 leftButton:SetScript("OnClick", function()
     if currentPage and currentPage > 1 then
         currentPage = currentPage - 1
@@ -399,29 +473,13 @@ leftButton:SetScript("OnClick", function()
     UpdateResultsDisplay(itemCheckbox:GetChecked())
 end)
 
--- Add highlighting and clicking features to the left button
-leftButton:SetScript("OnEnter", function(self)
-    self.texture:SetVertexColor(1, 0, 0)
-end)
-leftButton:SetScript("OnLeave", function(self)
-    self.texture:SetVertexColor(1, 1, 1)
-end)
-leftButton:SetScript("OnMouseUp", function(self, button)
-    if button == "LeftButton" then
-        frame:Hide()
-    end
-end)
-
-
-
-
-local rightButton = CreateFrame("Button", nil, frame)
+local rightButton = rightButton or CreateFrame("Button", nil, frame)
 rightButton:SetSize(32, 32)
 rightButton:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -10, 10)
 rightButton.texture = rightButton:CreateTexture(nil, "ARTWORK")
 rightButton.texture:SetAllPoints()
-rightButton.texture:SetTexture("Interface\\AddOns\\Lookitup\\right.png")
-rightButton.texture:SetVertexColor(1, 1, 1) -- Initially gray out the button
+rightButton.texture:SetTexture("Interface\\AddOns\\Lookitup\\textures\\right.png") -- Ensure the texture path is correct
+rightButton.texture:SetVertexColor(0.5, 0.5, 0.5) -- Initially gray out the button
 rightButton:SetScript("OnClick", function()
     if currentPage and currentPage < totalPages then
         currentPage = currentPage + 1
@@ -431,18 +489,8 @@ rightButton:SetScript("OnClick", function()
     UpdateResultsDisplay(itemCheckbox:GetChecked())
 end)
 
--- Add highlighting and clicking features to the right button
-rightButton:SetScript("OnEnter", function(self)
-    self.texture:SetVertexColor(1, 0, 0)
-end)
-rightButton:SetScript("OnLeave", function(self)
-    self.texture:SetVertexColor(1, 1, 1)
-end)
-rightButton:SetScript("OnMouseUp", function(self, button)
-    if button == "LeftButton" then
-        frame:Hide()
-    end
-end)
+-- Call UpdatePaginationButtons after creating the buttons
+UpdatePaginationButtons()
 
 -- Collect Button with Texture
 local collectButton = CreateFrame("Button", nil, frame)
@@ -451,7 +499,7 @@ collectButton:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -40, -10)
 
 collectButton.texture = collectButton:CreateTexture(nil, "ARTWORK")
 collectButton.texture:SetAllPoints()
-collectButton.texture:SetTexture("Interface\\AddOns\\Lookitup\\saveit.png")
+collectButton.texture:SetTexture("Interface\\AddOns\\Lookitup\\textures\\saveit.png")
 
 collectButton:SetScript("OnEnter", function(self)
     self.texture:SetVertexColor(0.5, 0.5, 0) -- Blue color on hover
@@ -512,7 +560,7 @@ searchButton:SetPoint("LEFT", searchBox, "RIGHT", 10, 0)
 
 searchButton.texture = searchButton:CreateTexture(nil, "ARTWORK")
 searchButton.texture:SetAllPoints()
-searchButton.texture:SetTexture("Interface\\AddOns\\Lookitup\\search.png")
+searchButton.texture:SetTexture("Interface\\AddOns\\Lookitup\\textures\\search.png")
 
 searchButton:SetScript("OnEnter", function(self)
     self.texture:SetVertexColor(0.8, 0.8, 0.8) -- Slightly darken on hover

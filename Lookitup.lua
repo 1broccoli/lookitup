@@ -117,6 +117,33 @@ local function SearchDatabase(query, isItem)
     return results
 end
 
+-- Helper function to update item quality
+local function UpdateItemQuality(line, itemID)
+    local qualityColor = QUALITY_COLORS[select(3, GetItemInfo(itemID))] or "|cffffffff"
+    if line and line.text then
+        line.text:SetText(qualityColor .. line.text:GetText() .. "|r")
+    end
+end
+
+-- Function to update the pagination buttons
+local function UpdatePaginationButtons()
+    if not leftButton or not rightButton then
+        return -- Exit early if buttons are not created
+    end
+
+    -- Ensure currentPage and totalPages are valid
+    currentPage = currentPage or 1
+    totalPages = totalPages or 1
+
+    if not currentPage or not totalPages then
+        return
+    end
+
+    -- Enable or disable buttons based on the current page
+    leftButton:SetEnabled(currentPage > 1)
+    rightButton:SetEnabled(currentPage < totalPages)
+end
+
 -- Main Frame
 local frame = CreateFrame("Frame", "LookitupFrame", UIParent, "BackdropTemplate")
 frame:SetSize(500, 600)
@@ -164,25 +191,6 @@ closeTexture:SetScript("OnMouseUp", function(self, button)
         frame:Hide()
     end
 end)
-
--- Function to update the pagination buttons
-local function UpdatePaginationButtons()
-    if not leftButton or not rightButton then
-        return -- Exit early if buttons are not created
-    end
-
-    -- Ensure currentPage and totalPages are valid
-    currentPage = currentPage or 1
-    totalPages = totalPages or 1
-
-    if not currentPage or not totalPages then
-        return
-    end
-
-    -- Enable or disable buttons based on the current page
-    leftButton:SetEnabled(currentPage > 1)
-    rightButton:SetEnabled(currentPage < totalPages)
-end
 
 -- Checkboxes
 local itemCheckbox = CreateFrame("CheckButton", nil, frame, "UICheckButtonTemplate")
@@ -437,24 +445,6 @@ UIDropDownMenu_Initialize(qualityDropdown, function(self, level, menuList)
 end)
 
 UIDropDownMenu_SetSelectedValue(qualityDropdown, "ALL")
-
--- Helper function to update item quality
-function UpdateItemQuality(line, itemID)
-    local qualityColor = QUALITY_COLORS[select(3, GetItemInfo(itemID))] or "|cffffffff"
-    if line and line.text then
-        line.text:SetText(qualityColor .. line.text:GetText() .. "|r")
-    end
-end
-
--- Create the results count text
-local resultsCountText = resultsCountText or frame:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-resultsCountText:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 50, 10) -- Adjusted position
-resultsCountText:SetText("")
-
--- Page Indicator
-local pageIndicator = pageIndicator or frame:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-pageIndicator:SetPoint("BOTTOM", frame, "BOTTOM", 0, 10)
-pageIndicator:SetText("Page 1 / 1")
 
 -- Create pagination buttons
 local leftButton = leftButton or CreateFrame("Button", nil, frame)

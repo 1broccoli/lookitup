@@ -8,7 +8,7 @@ local AddonName, Addon = ...
 Addon.db = {}
 
 -- Saved variables
-dbSavedVariables = dbSavedVariables or { items = {}, spells = {}, lastCheckbox = "item", debug = false }
+dbSavedVariables = dbSavedVariables or { items = {}, spells = {}, quests = {}, lastCheckbox = "item", debug = false }
 
 -- Load the database from Lookitup\data\db.lua
 local dbFilePath = "Interface\\AddOns\\Lookitup\\data\\db.lua"
@@ -17,6 +17,7 @@ if dbData then
     if type(loadError) == "table" then
         dbSavedVariables.items = loadError.items or {}
         dbSavedVariables.spells = loadError.spells or {}
+        dbSavedVariables.quests = loadError.quests or {}
     else
         print("|cffff0000[Lookitup]: Error executing database file:|r", loadError or "Unknown error")
     end
@@ -26,13 +27,14 @@ end
 
 -- Ensure the database is loaded
 if not dbSavedVariables then
-    dbSavedVariables = { items = {}, spells = {}, lastCheckbox = "item", debug = false }
+    dbSavedVariables = { items = {}, spells = {}, quests = {}, lastCheckbox = "item", debug = false }
 end
 
--- Check if the db.lua file has defined items and spells
-if db and db.items and db.spells then
+-- Check if the db.lua file has defined items, spells, and quests
+if db and db.items and db.spells and db.quests then
     dbSavedVariables.items = db.items
     dbSavedVariables.spells = db.spells
+    dbSavedVariables.quests = db.quests
 else
     print("|cffff0000[Lookitup]: Failed to load database.|r")
 end
@@ -68,48 +70,34 @@ local function DebugPrint(message)
 end
 
 -- Helper Functions
-local function AddIDToDatabase(id, name, isItem)
-    local db = isItem and dbSavedVariables.items or dbSavedVariables.spells
+local function AddIDToDatabase(id, name, isItem, isQuest)
+    local db = isItem and dbSavedVariables.items or (isQuest and dbSavedVariables.quests) or dbSavedVariables.spells
     if not db[id] then
         db[id] = name
         DebugPrint("Added ID " .. id .. " (" .. name .. ") to database.")
     end
 end
 
-local function SearchDatabase(query, isItem)
+local function SearchDatabase(query, isItem, isQuest)
     local results = {}
-    local db = isItem and dbSavedVariables.items or dbSavedVariables.spells
+    local db = isItem and dbSavedVariables.items or (isQuest and dbSavedVariables.quests) or dbSavedVariables.spells
     for id, name in pairs(db) do
         if name:lower():find(query:lower()) then
-            if currentFilter == "ALL" or (isItem and select(3, GetItemInfo(id)) == currentFilter) then
-                local isSOD = name:find("Seasoning of Discovery") -- Check for SOD items
-                table.insert(results, { id = id, name = name, isSOD = isSOD })
-            end
+            table.insert(results, { id = id, name = name })
         end
     end
 
     -- If no results found, request information from World of Warcraft
-    if #results == 0 then
-        if isItem then
-            local itemID = tonumber(query)
-            if itemID then
-                local itemName, _, itemQuality = GetItemInfo(itemID)
-                if itemName and (currentFilter == "ALL" or itemQuality == currentFilter) then
-                    local isSOD = itemName:find("Seasoning of Discovery") -- Check for SOD items
-                    table.insert(results, { id = itemID, name = itemName, isSOD = isSOD })
-                    -- Add the result to the database
-                    AddIDToDatabase(itemID, itemName, isItem)
-                end
-            end
-        else
-            local spellID = tonumber(query)
-            if spellID then
-                local spellName = GetSpellInfo(spellID)
-                if spellName then
-                    table.insert(results, { id = spellID, name = spellName, isSOD = false })
-                    -- Add the result to the database
-                    AddIDToDatabase(spellID, spellName, isItem)
-                end
+    if #results == 0 and isQuest then
+        local questID = tonumber(query)
+        if questID then
+            local questLink = "\124cffffff00\124Hquest:" .. questID .. ":60\124h[Quest Name]\124h\124r"
+            GameTooltip:SetHyperlink(questLink)
+            local questName = GameTooltipTextLeft1:GetText()
+            GameTooltip:ClearLines()
+            if questName and questName ~= "" and not questName:find("quest:") then
+                table.insert(results, { id = questID, name = questName })
+                dbSavedVariables.quests[questID] = questName
             end
         end
     end
@@ -143,6 +131,10 @@ local function UpdatePaginationButtons()
     leftButton:SetEnabled(currentPage > 1)
     rightButton:SetEnabled(currentPage < totalPages)
 end
+
+-- Load AceHook-3.0
+local AceHook = LibStub("AceHook-3.0")
+local Lookitup = AceHook:Embed({})
 
 -- Main Frame
 local frame = CreateFrame("Frame", "LookitupFrame", UIParent, "BackdropTemplate")
@@ -199,15 +191,31 @@ itemCheckbox.text = itemCheckbox:CreateFontString(nil, "ARTWORK", "GameFontHighl
 itemCheckbox.text:SetPoint("LEFT", itemCheckbox, "RIGHT", 5, 0)
 itemCheckbox.text:SetText("Item IDs")
 
+itemCheckbox:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Item IDs\nHold Ctrl to open in Dressing Room", nil, nil, nil, nil, true)
+    GameTooltip:Show()
+end)
+itemCheckbox:SetScript("OnLeave", function(self)
+    GameTooltip:Hide()
+end)
+
 local spellCheckbox = CreateFrame("CheckButton", nil, frame, "UICheckButtonTemplate")
 spellCheckbox:SetPoint("LEFT", itemCheckbox, "RIGHT", 200, 0)
 spellCheckbox.text = spellCheckbox:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
 spellCheckbox.text:SetPoint("LEFT", spellCheckbox, "RIGHT", 5, 0)
 spellCheckbox.text:SetText("Spell IDs")
 
+local questCheckbox = CreateFrame("CheckButton", nil, frame, "UICheckButtonTemplate")
+questCheckbox:SetPoint("LEFT", spellCheckbox, "RIGHT", 80, 0)
+questCheckbox.text = questCheckbox:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+questCheckbox.text:SetPoint("LEFT", questCheckbox, "RIGHT", 5, 0)
+questCheckbox.text:SetText("Quest IDs")
+
 itemCheckbox:SetScript("OnClick", function()
     if itemCheckbox:GetChecked() then
         spellCheckbox:SetChecked(false)
+        questCheckbox:SetChecked(false)
         dbSavedVariables.lastCheckbox = "item"
     else
         itemCheckbox:SetChecked(true)
@@ -217,34 +225,50 @@ end)
 spellCheckbox:SetScript("OnClick", function()
     if spellCheckbox:GetChecked() then
         itemCheckbox:SetChecked(false)
+        questCheckbox:SetChecked(false)
         dbSavedVariables.lastCheckbox = "spell"
     else
         spellCheckbox:SetChecked(true)
     end
 end)
 
--- Set last checkbox state on frame show
-frame:SetScript("OnShow", function()
-    local lastCheckbox = dbSavedVariables.lastCheckbox
-    if (lastCheckbox == "item") then
-        itemCheckbox:SetChecked(true)
-        spellCheckbox:SetChecked(false)
-    else
-        spellCheckbox:SetChecked(true)
+questCheckbox:SetScript("OnClick", function()
+    if questCheckbox:GetChecked() then
         itemCheckbox:SetChecked(false)
+        spellCheckbox:SetChecked(false)
+        dbSavedVariables.lastCheckbox = "quest"
+    else
+        questCheckbox:SetChecked(true)
     end
 end)
 
 -- Ensure the last checkbox state is set when the addon loads
 local function OnAddonLoaded()
     local lastCheckbox = dbSavedVariables.lastCheckbox
-    if (lastCheckbox == "item") then
+    if lastCheckbox == "item" then
         itemCheckbox:SetChecked(true)
         spellCheckbox:SetChecked(false)
-    else
+        questCheckbox:SetChecked(false)
+    elseif lastCheckbox == "spell" then
         spellCheckbox:SetChecked(true)
         itemCheckbox:SetChecked(false)
+        questCheckbox:SetChecked(false)
+    elseif lastCheckbox == "quest" then
+        questCheckbox:SetChecked(true)
+        itemCheckbox:SetChecked(false)
+        spellCheckbox:SetChecked(false)
+    else
+        -- Default to spell checkbox checked
+        spellCheckbox:SetChecked(true)
+        itemCheckbox:SetChecked(false)
+        questCheckbox:SetChecked(false)
+        dbSavedVariables.lastCheckbox = "spell"
     end
+
+    -- Set dropdown menu to "ALL" by default
+    UIDropDownMenu_SetSelectedValue(qualityDropdown, "ALL")
+    UIDropDownMenu_SetText(qualityDropdown, "|cffffffffALL|r") -- Explicitly set the text to "ALL"
+    currentFilter = "ALL"
 end
 
 -- Register the event to set the checkbox state when the addon loads
@@ -256,6 +280,31 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
         self:UnregisterEvent("ADDON_LOADED")
     end
 end)
+
+-- Ensure the OnShow hook is applied only once
+local isOnShowHooked = false
+frame:SetScript("OnShow", function()
+    if not isOnShowHooked then
+        Lookitup:HookScript(frame, "OnShow", function()
+            local lastCheckbox = dbSavedVariables.lastCheckbox
+            if lastCheckbox == "item" then
+                itemCheckbox:SetChecked(true)
+                spellCheckbox:SetChecked(false)
+                questCheckbox:SetChecked(false)
+            elseif lastCheckbox == "spell" then
+                spellCheckbox:SetChecked(true)
+                itemCheckbox:SetChecked(false)
+                questCheckbox:SetChecked(false)
+            elseif lastCheckbox == "quest" then
+                questCheckbox:SetChecked(true)
+                itemCheckbox:SetChecked(false)
+                spellCheckbox:SetChecked(false)
+            end
+        end)
+        isOnShowHooked = true
+    end
+end)
+
 local resultsPerPage = resultsPerPage or 100 -- Default to 100 results per page
 local currentPage = currentPage or 1
 local totalPages = totalPages or 1
@@ -280,7 +329,33 @@ local pageIndicator = pageIndicator or frame:CreateFontString(nil, "ARTWORK", "G
 pageIndicator:SetPoint("BOTTOM", frame, "BOTTOM", 0, 10)
 pageIndicator:SetText("Page 1 / 1")
 
-local function UpdateResultsDisplay(isItem)
+local function SetupTooltip(line, isItem, isQuest, result)
+    Lookitup:HookScript(line, "OnEnter", function()
+        GameTooltip:SetOwner(line, "ANCHOR_RIGHT")
+        if isItem then
+            GameTooltip:SetHyperlink("item:" .. result.id)
+            if IsControlKeyDown() then
+                DressUpItemLink("item:" .. result.id)
+            end
+        elseif isQuest then
+            local questLink = "\124cffffff00\124Hquest:" .. result.id .. ":60\124h[" .. result.name .. "]\124h\124r"
+            GameTooltip:SetHyperlink(questLink)
+        else
+            GameTooltip:SetSpellByID(result.id)
+            local spellIcon = select(3, GetSpellInfo(result.id))
+            if spellIcon then
+                GameTooltip:AddTexture(spellIcon)
+            end
+        end
+        GameTooltip:Show()
+    end)
+
+    Lookitup:HookScript(line, "OnLeave", function()
+        GameTooltip:Hide()
+    end)
+end
+
+local function UpdateResultsDisplay(isItem, isQuest)
     -- Clear previous results
     if content then
         content:Hide()
@@ -291,6 +366,7 @@ local function UpdateResultsDisplay(isItem)
     content:SetSize(450, 1)
     scrollFrame:SetScrollChild(content)
 
+    -- Calculate the range of results to display
     local startIndex = (currentPage - 1) * resultsPerPage + 1
     local endIndex = math.min(currentPage * resultsPerPage, #results)
     local yOffset = 0
@@ -305,13 +381,21 @@ local function UpdateResultsDisplay(isItem)
         line.text:SetPoint("LEFT", line, "LEFT")
 
         local displayName = result.name
-        if result.isSOD then
-            displayName = "|cffffffff(SOD)|r " .. displayName
-        end
-
         if isItem then
-            local qualityColor = QUALITY_COLORS[select(3, GetItemInfo(result.id))] or "|cffffffff"
-            displayName = qualityColor .. displayName .. "|r"
+            local itemID = result.id
+            local _, _, itemQuality = GetItemInfo(itemID)
+            if currentFilter ~= "ALL" and itemQuality ~= currentFilter then
+                -- Skip items that don't match the quality filter
+                do
+                    yOffset = yOffset - 25
+                    break
+                end
+            else
+                local qualityColor = QUALITY_COLORS[itemQuality] or "|cffffffff"
+                displayName = qualityColor .. displayName .. "|r"
+            end
+        elseif isQuest then
+            displayName = "|cffffff00" .. displayName .. "|r" -- Yellow color for quest IDs
         else
             displayName = "|cffffff00" .. displayName .. "|r" -- Yellow color for spell IDs
         end
@@ -325,6 +409,9 @@ local function UpdateResultsDisplay(isItem)
                     local message = "Item ID: " .. result.id .. " - |cffffff00#|r " .. itemLink
                     DEFAULT_CHAT_FRAME:AddMessage(message)
                 end
+            elseif isQuest then
+                local questLink = "\124cffffff00\124Hquest:" .. result.id .. ":60\124h[" .. result.name .. "]\124h\124r"
+                DEFAULT_CHAT_FRAME:AddMessage("Quest ID: " .. result.id .. " - " .. questLink)
             else
                 local spellLink = GetSpellLink(result.id)
                 if spellLink then
@@ -332,27 +419,6 @@ local function UpdateResultsDisplay(isItem)
                     DEFAULT_CHAT_FRAME:AddMessage(message)
                 end
             end
-        end)
-
-        line:SetScript("OnEnter", function()
-            GameTooltip:SetOwner(line, "ANCHOR_RIGHT")
-            if isItem then
-                GameTooltip:SetHyperlink("item:" .. result.id)
-                if IsControlKeyDown() then
-                    DressUpItemLink("item:" .. result.id)
-                end
-            else
-                GameTooltip:SetSpellByID(result.id)
-                local spellIcon = select(3, GetSpellInfo(result.id))
-                if spellIcon then
-                    GameTooltip:AddTexture(spellIcon)
-                end
-            end
-            GameTooltip:Show()
-        end)
-
-        line:SetScript("OnLeave", function()
-            GameTooltip:Hide()
         end)
 
         if isItem then
@@ -370,6 +436,8 @@ local function UpdateResultsDisplay(isItem)
                 end)
             end
         end
+
+        SetupTooltip(line, isItem, isQuest, result)
 
         yOffset = yOffset - 25
     end
@@ -405,6 +473,7 @@ searchBox:SetScript("OnTextChanged", function(self, userInput)
     if not userInput then return end -- Ignore programmatic changes
     local query = self:GetText()
     local isItem = itemCheckbox:GetChecked()
+    local isQuest = questCheckbox:GetChecked()
 
     if query == "" then
         results = {}
@@ -413,17 +482,17 @@ searchBox:SetScript("OnTextChanged", function(self, userInput)
         currentPage = 1
         totalPages = 1
         UpdatePaginationButtons()
-        UpdateResultsDisplay(isItem)
+        UpdateResultsDisplay(isItem, isQuest)
         return
     end
 
     -- Perform search in the local database
-    results = SearchDatabase(query, isItem)
+    results = SearchDatabase(query, isItem, isQuest)
 
     -- Update results display
     totalPages = math.ceil(#results / resultsPerPage)
     currentPage = 1
-    UpdateResultsDisplay(isItem)
+    UpdateResultsDisplay(isItem, isQuest)
 end)
 
 -- Dropdown for Quality
@@ -432,6 +501,7 @@ qualityDropdown:SetPoint("LEFT", itemCheckbox, "RIGHT", 50, -3)
 
 UIDropDownMenu_SetWidth(qualityDropdown, 100)
 UIDropDownMenu_Initialize(qualityDropdown, function(self, level, menuList)
+    if not level then return end
     for _, option in ipairs(QUALITY_OPTIONS) do
         local info = UIDropDownMenu_CreateInfo()
         info.text = option.text
@@ -439,12 +509,21 @@ UIDropDownMenu_Initialize(qualityDropdown, function(self, level, menuList)
         info.func = function()
             currentFilter = option.value
             UIDropDownMenu_SetSelectedValue(qualityDropdown, option.value)
+            UIDropDownMenu_SetText(qualityDropdown, option.text) -- Ensure dropdown text updates
+            DebugPrint("Quality filter set to: " .. tostring(option.value))
+            -- Refresh results display with the updated filter
+            UpdateResultsDisplay(itemCheckbox:GetChecked(), questCheckbox:GetChecked())
         end
-        UIDropDownMenu_AddButton(info)
+        UIDropDownMenu_AddButton(info, level)
     end
 end)
 
 UIDropDownMenu_SetSelectedValue(qualityDropdown, "ALL")
+
+-- Ensure the dropdown reflects the current filter when the frame is shown
+frame:SetScript("OnShow", function()
+    UIDropDownMenu_SetSelectedValue(qualityDropdown, currentFilter)
+end)
 
 -- Create pagination buttons
 local leftButton = leftButton or CreateFrame("Button", nil, frame)
@@ -460,7 +539,7 @@ leftButton:SetScript("OnClick", function()
     else
         currentPage = totalPages
     end
-    UpdateResultsDisplay(itemCheckbox:GetChecked())
+    UpdateResultsDisplay(itemCheckbox:GetChecked(), questCheckbox:GetChecked())
 end)
 
 local rightButton = rightButton or CreateFrame("Button", nil, frame)
@@ -476,71 +555,152 @@ rightButton:SetScript("OnClick", function()
     else
         currentPage = 1
     end
-    UpdateResultsDisplay(itemCheckbox:GetChecked())
+    UpdateResultsDisplay(itemCheckbox:GetChecked(), questCheckbox:GetChecked())
 end)
 
 -- Call UpdatePaginationButtons after creating the buttons
 UpdatePaginationButtons()
 
--- Collect Button with Texture
-local collectButton = CreateFrame("Button", nil, frame)
-collectButton:SetSize(16, 16)
-collectButton:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -40, -10)
+-- Collect Items Button
+local collectItemsButton = CreateFrame("Button", nil, frame)
+collectItemsButton:SetSize(16, 16)
+collectItemsButton:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -40, -10)
+collectItemsButton.texture = collectItemsButton:CreateTexture(nil, "ARTWORK")
+collectItemsButton.texture:SetAllPoints()
+collectItemsButton.texture:SetTexture("Interface\\AddOns\\Lookitup\\textures\\saveit.png")
+collectItemsButton.texture:SetVertexColor(0, 1, 0) -- Green for items
 
-collectButton.texture = collectButton:CreateTexture(nil, "ARTWORK")
-collectButton.texture:SetAllPoints()
-collectButton.texture:SetTexture("Interface\\AddOns\\Lookitup\\textures\\saveit.png")
-
-collectButton:SetScript("OnEnter", function(self)
-    self.texture:SetVertexColor(0.5, 0.5, 0) -- Blue color on hover
+collectItemsButton:SetScript("OnEnter", function(self)
+    self.texture:SetVertexColor(0.5, 1, 0.5) -- Highlight green on hover
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    GameTooltip:SetText("Collect Item IDs and Spell IDs", nil, nil, nil, nil, true)
+    GameTooltip:SetText("Collect Item IDs", nil, nil, nil, nil, true)
     GameTooltip:Show()
 end)
 
-collectButton:SetScript("OnLeave", function(self)
-    self.texture:SetVertexColor(1, 1, 1) -- Reset color on leave
+collectItemsButton:SetScript("OnLeave", function(self)
+    self.texture:SetVertexColor(0, 1, 0) -- Reset color
     GameTooltip:Hide()
 end)
 
-collectButton:SetScript("OnMouseDown", function(self)
-    self.texture:SetVertexColor(0, 1, 0) -- Green color on click
-end)
-
-collectButton:SetScript("OnMouseUp", function(self)
-    self.texture:SetVertexColor(0, 1, 0) -- Green color on release
-    local isItem = itemCheckbox:GetChecked()
-    local apiFunction = isItem and GetItemInfo or GetSpellInfo
-    local db = isItem and dbSavedVariables.items or dbSavedVariables.spells
-    local consecutiveMisses = 0
-    local maxConsecutiveMisses = 1000 -- Stop after 1000 consecutive misses
-    local addedCount = 0
-
+collectItemsButton:SetScript("OnMouseUp", function(self)
+    local db = dbSavedVariables.items
+    local consecutiveMisses, addedCount = 0, 0
     local id = 1
-    while consecutiveMisses < maxConsecutiveMisses do
+    while consecutiveMisses < 20000 do
         if not db[id] then
-            local name = apiFunction(id)
+            local name = GetItemInfo(id)
             if name then
-                AddIDToDatabase(id, name, isItem)
+                AddIDToDatabase(id, name, true)
                 addedCount = addedCount + 1
-                consecutiveMisses = 0 -- Reset consecutive misses counter
+                consecutiveMisses = 0
             else
                 consecutiveMisses = consecutiveMisses + 1
             end
-        else
-            consecutiveMisses = 0 -- Reset consecutive misses counter if ID is already in the database
         end
         id = id + 1
     end
+    print("|cffe6cc80Collection|r |cffffffffComplete!|r |cff00ffffDatabase|r updated. |cffffff00(" .. addedCount .. " items added)|r.")
+end)
 
-    local totalItems = 0
-    for _ in pairs(dbSavedVariables.items) do totalItems = totalItems + 1 end
+-- Collect Spells Button
+local collectSpellsButton = CreateFrame("Button", nil, frame)
+collectSpellsButton:SetSize(16, 16)
+collectSpellsButton:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -60, -10)
+collectSpellsButton.texture = collectSpellsButton:CreateTexture(nil, "ARTWORK")
+collectSpellsButton.texture:SetAllPoints()
+collectSpellsButton.texture:SetTexture("Interface\\AddOns\\Lookitup\\textures\\saveit.png")
+collectSpellsButton.texture:SetVertexColor(0, 1, 1) -- Teal for spells
 
-    local totalSpells = 0
-    for _ in pairs(dbSavedVariables.spells) do totalSpells = totalSpells + 1 end
+collectSpellsButton:SetScript("OnEnter", function(self)
+    self.texture:SetVertexColor(0.5, 1, 1) -- Highlight teal on hover
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Collect Spell IDs", nil, nil, nil, nil, true)
+    GameTooltip:Show()
+end)
 
-    local typeText = isItem and "items" or "spells"
-    print("|cffe6cc80Collection|r |cffffffffComplete!|r |cff00ffffDatabase|r |cff1eff00updated|r. |cffffff00(" .. addedCount .. " " .. typeText .. " added to DB)|r. |cffffffff(Total items: " .. totalItems .. ", Total spells: " .. totalSpells .. ")|r")
+collectSpellsButton:SetScript("OnLeave", function(self)
+    self.texture:SetVertexColor(0, 1, 1) -- Reset color
+    GameTooltip:Hide()
+end)
+
+collectSpellsButton:SetScript("OnMouseUp", function(self)
+    local db = dbSavedVariables.spells
+    local consecutiveMisses, addedCount = 0, 0
+    local id = 1
+    while consecutiveMisses < 50000 do
+        if not db[id] then
+            local name = GetSpellInfo(id)
+            if name then
+                AddIDToDatabase(id, name, false)
+                addedCount = addedCount + 1
+                consecutiveMisses = 0
+            else
+                consecutiveMisses = consecutiveMisses + 1
+            end
+        end
+        id = id + 1
+    end
+    print("|cffe6cc80Collection|r |cffffffffComplete!|r |cff00ffffDatabase|r updated. |cffffff00(" .. addedCount .. " spells added)|r.")
+end)
+
+-- Collect Quests Button
+local collectQuestsButton = CreateFrame("Button", nil, frame)
+collectQuestsButton:SetSize(16, 16)
+collectQuestsButton:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -80, -10)
+collectQuestsButton.texture = collectQuestsButton:CreateTexture(nil, "ARTWORK")
+collectQuestsButton.texture:SetAllPoints()
+collectQuestsButton.texture:SetTexture("Interface\\AddOns\\Lookitup\\textures\\saveit.png")
+collectQuestsButton.texture:SetVertexColor(1, 1, 0) -- Yellow for quests
+
+collectQuestsButton:SetScript("OnEnter", function(self)
+    self.texture:SetVertexColor(1, 1, 0.5) -- Highlight yellow on hover
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Collect Quest IDs", nil, nil, nil, nil, true)
+    GameTooltip:Show()
+end)
+
+collectQuestsButton:SetScript("OnLeave", function(self)
+    self.texture:SetVertexColor(1, 1, 0) -- Reset color
+    GameTooltip:Hide()
+end)
+
+local function CollectQuestsCoroutine()
+    local db = dbSavedVariables.quests
+    local addedQuests = 0
+    for questID = 1, 10000 do
+        if not db[questID] then
+            local questLink = "\124cffffff00\124Hquest:" .. questID .. ":60\124h[Quest Name]\124h\124r"
+            GameTooltip:SetHyperlink(questLink)
+            local questName = GameTooltipTextLeft1:GetText()
+            GameTooltip:ClearLines()
+            if questName and questName ~= "" and not questName:find("quest:") then
+                db[questID] = questName
+                addedQuests = addedQuests + 1
+            end
+        end
+        if questID % 100 == 0 then
+            coroutine.yield() -- Yield every 100 iterations to prevent freezing
+        end
+    end
+    print("|cffe6cc80Collection|r |cffffffffComplete!|r |cff00ffffDatabase|r updated. |cffffff00(" .. addedQuests .. " quests added)|r.")
+end
+
+local questCollectorCoroutine
+
+collectQuestsButton:SetScript("OnMouseUp", function(self)
+    if not questCollectorCoroutine or coroutine.status(questCollectorCoroutine) == "dead" then
+        questCollectorCoroutine = coroutine.create(CollectQuestsCoroutine)
+    end
+
+    local function OnUpdateHandler()
+        if questCollectorCoroutine and coroutine.status(questCollectorCoroutine) == "suspended" then
+            coroutine.resume(questCollectorCoroutine)
+        else
+            collectQuestsButton:SetScript("OnUpdate", nil) -- Stop the OnUpdate handler when done
+        end
+    end
+
+    collectQuestsButton:SetScript("OnUpdate", OnUpdateHandler)
 end)
 
 -- Search Button with Texture
@@ -572,6 +732,7 @@ searchButton:SetScript("OnMouseUp", function(self)
     self.texture:SetVertexColor(0.8, 0.8, 0.8) -- Slightly darken on release
     local query = searchBox:GetText()
     local isItem = itemCheckbox:GetChecked()
+    local isQuest = questCheckbox:GetChecked()
 
     if query == "" and (currentFilter == 5 or currentFilter == 6) then
         -- If the query is blank and the filter is set to Legendary or Artifact, return all results of that quality
@@ -591,7 +752,7 @@ searchButton:SetScript("OnMouseUp", function(self)
         return
     else
         -- Perform search in the local database
-        results = SearchDatabase(query, isItem)
+        results = SearchDatabase(query, isItem, isQuest)
         
         -- If no results found in the local database, request information from the server
         if #results == 0 then
@@ -604,6 +765,18 @@ searchButton:SetScript("OnMouseUp", function(self)
                         table.insert(results, { id = itemID, name = itemName, isSOD = isSOD })
                         -- Add the result to the database
                         AddIDToDatabase(itemID, itemName, isItem)
+                    end
+                end
+            elseif isQuest then
+                local questID = tonumber(query)
+                if questID then
+                    local questLink = "\124cffffff00\124Hquest:" .. questID .. ":60\124h[Quest Name]\124h\124r"
+                    GameTooltip:SetHyperlink(questLink)
+                    local questName = GameTooltipTextLeft1:GetText()
+                    GameTooltip:ClearLines()
+                    if questName and questName ~= "" and not questName:find("quest:") then
+                        table.insert(results, { id = questID, name = questName })
+                        dbSavedVariables.quests[questID] = questName
                     end
                 end
             else
@@ -622,7 +795,7 @@ searchButton:SetScript("OnMouseUp", function(self)
 
     totalPages = math.ceil(#results / resultsPerPage)
     currentPage = 1
-    UpdateResultsDisplay(isItem)
+    UpdateResultsDisplay(isItem, isQuest)
 end)
 
 -- Slash Command
@@ -634,3 +807,50 @@ SlashCmdList["Lookitup"] = function()
         frame:Show()
     end
 end
+
+-- Load LibDBIcon-1.0
+local LDB = LibStub("LibDataBroker-1.1"):NewDataObject("Lookitup", {
+    type = "launcher",
+    icon = "Interface\\AddOns\\Lookitup\\textures\\mmb.jpeg",  -- Path to the minimap icon
+    OnClick = function(_, button)
+        if button == "LeftButton" then
+            -- Toggle the Lookitup frame
+            if LookitupFrame:IsShown() then
+                LookitupFrame:Hide()
+            else
+                LookitupFrame:Show()
+            end
+        end
+    end,
+    OnTooltipShow = function(tooltip)
+        tooltip:AddLine("|cffe6cc80Lookitup|r")
+        tooltip:AddLine("|cff9d9d9dOpen Lookitup,|r")
+    end,
+})
+
+local icon = LibStub("LibDBIcon-1.0")
+local minimapButtonDB = {}
+
+-- Register the minimap button
+icon:Register("Lookitup", LDB, minimapButtonDB)
+
+-- Save minimap button position on logout
+eventFrame:RegisterEvent("PLAYER_LOGOUT")
+eventFrame:SetScript("OnEvent", function(_, event)
+    if event == "PLAYER_LOGOUT" then
+        -- Save the minimap button position
+        LookitupSavedVariables = LookitupSavedVariables or {}
+        LookitupSavedVariables.minimapButtonDB = minimapButtonDB
+        Lookitup:UnhookAll()
+    end
+end)
+
+-- Load saved minimap button position on addon load
+eventFrame:RegisterEvent("ADDON_LOADED")
+eventFrame:SetScript("OnEvent", function(_, event, addon)
+    if event == "ADDON_LOADED" and addon == "Lookitup" then
+        LookitupSavedVariables = LookitupSavedVariables or {}
+        minimapButtonDB = LookitupSavedVariables.minimapButtonDB or {}
+        icon:Refresh("Lookitup", minimapButtonDB)
+    end
+end)

@@ -175,6 +175,25 @@ closeTexture:SetScript("OnMouseUp", function(self, button)
     end
 end)
 
+-- Summary Text
+local summaryText = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+summaryText:SetPoint("TOPLEFT", frame, "TOPLEFT", 10, -10) -- Position at the top left
+summaryText:SetJustifyH("LEFT")
+summaryText:SetText("") -- Initialize with empty text
+summaryText:Hide() -- Hidden by default
+
+-- Define UpdateSummaryText before it is used
+local function UpdateSummaryText()
+    local itemCount = #dbSavedVariables.items
+    local spellCount = #dbSavedVariables.spells
+    local questCount = #dbSavedVariables.quests
+
+    summaryText:SetText(string.format(
+        "|cffe6cc80Item IDs:|r |cffffffff%d|r\n|cff00ffffSpell IDs:|r |cffffffff%d|r\n|cffffff00Quest IDs:|r |cffffffff%d|r",
+        itemCount, spellCount, questCount
+    ))
+end
+
 -- Checkboxes
 local itemCheckbox = CreateFrame("CheckButton", nil, frame, "UICheckButtonTemplate")
 itemCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 10, -40)
@@ -600,7 +619,7 @@ collectItemsButton:SetScript("OnMouseUp", function(self)
         id = id + 1
     end
     print("|cffe6cc80Collection|r |cffffffffComplete!|r |cff00ffffDatabase|r updated. |cffffff00(" .. addedCount .. " items added)|r.")
-    UpdateSummaryText()
+    UpdateSummaryText() -- This call is now valid
 end)
 
 -- Collect Spells Button
@@ -888,60 +907,6 @@ eventFrame:SetScript("OnEvent", function(_, event, addon)
         icon:Refresh("Lookitup", minimapButtonDB)
     end
 end)
-
--- Summary Text
-local summaryText = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-summaryText:SetPoint("TOPLEFT", frame, "TOPLEFT", 10, -10) -- Position at the top left
-summaryText:SetJustifyH("LEFT")
-summaryText:SetText("") -- Initialize with empty text
-summaryText:Hide() -- Hidden by default
-
-local function UpdateSummaryText()
-    local itemCount = #dbSavedVariables.items
-    local spellCount = #dbSavedVariables.spells
-    local questCount = #dbSavedVariables.quests
-
-    summaryText:SetText(string.format(
-        "|cffe6cc80Item IDs:|r |cffffffff%d|r\n|cff00ffffSpell IDs:|r |cffffffff%d|r\n|cffffff00Quest IDs:|r |cffffffff%d|r",
-        itemCount, spellCount, questCount
-    ))
-end
-
--- Slash Command to toggle summary text visibility
-dbSavedVariables.showSummary = dbSavedVariables.showSummary or false -- Default to hidden
-
-SLASH_Lookitup1 = "/lookitup"
-SLASH_LookitupStats1 = "/lookitup stats"
-SLASH_LookitupShow1 = "/lookitup show"
-SLASH_LookitupHide1 = "/lookitup hide"
-
-SlashCmdList["Lookitup"] = function()
-    print("|cffe6cc80[Lookitup Commands]:|r")
-    print("|cff00ff00/lookitup stats|r - Toggle summary text visibility.")
-    print("|cff00ff00/lookitup show|r - Show the Lookitup frame.")
-    print("|cff00ff00/lookitup hide|r - Hide the Lookitup frame.")
-end
-
-SlashCmdList["LookitupStats"] = function()
-    dbSavedVariables.showSummary = not dbSavedVariables.showSummary
-    if dbSavedVariables.showSummary then
-        summaryText:Show()
-        print("|cffe6cc80[Lookitup]:|r Summary stats are now |cff00ff00visible|r.")
-    else
-        summaryText:Hide()
-        print("|cffe6cc80[Lookitup]:|r Summary stats are now |cffff0000hidden|r.")
-    end
-end
-
-SlashCmdList["LookitupShow"] = function()
-    frame:Show()
-    print("|cffe6cc80[Lookitup]:|r Frame is now |cff00ff00visible|r.")
-end
-
-SlashCmdList["LookitupHide"] = function()
-    frame:Hide()
-    print("|cffe6cc80[Lookitup]:|r Frame is now |cffff0000hidden|r.")
-end
 
 -- Update the summary text whenever the frame is shown
 frame:HookScript("OnShow", function()

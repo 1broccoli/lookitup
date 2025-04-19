@@ -827,19 +827,28 @@ searchButton:SetScript("OnMouseUp", function(self)
 end)
 
 -- Slash Commands
-SLASH_Lookitup1 = "/lookitup"
-SLASH_LookitupStats1 = "/lookitupstats"
-SLASH_LookitupShow1 = "/lookitupshow"
-SLASH_LookitupHide1 = "/lookituphide"
+SLASH_LOOKITUP1 = "/lookitup"
+SLASH_LOOKITUPSTATS1 = "/lookitupstats"
+SLASH_LOOKITUPSHOW1 = "/lookitupshow"
+SLASH_LOOKITUPHIDE1 = "/lookituphide"
 
-SlashCmdList["Lookitup"] = function()
-    print("|cffe6cc80[Lookitup Commands]:|r")
-    print("|cff00ff00/lookitup stats|r - Toggle summary text visibility.")
-    print("|cff00ff00/lookitup show|r - Show the Lookitup frame.")
-    print("|cff00ff00/lookitup hide|r - Hide the Lookitup frame.")
+SlashCmdList["LOOKITUP"] = function(msg)
+    local command = msg:lower():match("^%s*(%S+)%s*$") -- Extract the first word from the input
+    if command == "stats" then
+        SlashCmdList["LOOKITUPSTATS"]()
+    elseif command == "show" then
+        SlashCmdList["LOOKITUPSHOW"]()
+    elseif command == "hide" then
+        SlashCmdList["LOOKITUPHIDE"]()
+    else
+        print("|cffe6cc80[Lookitup Commands]:|r")
+        print("|cff00ff00/lookitup stats|r - Toggle summary text visibility.")
+        print("|cff00ff00/lookitup show|r - Show the Lookitup frame.")
+        print("|cff00ff00/lookitup hide|r - Hide the Lookitup frame.")
+    end
 end
 
-SlashCmdList["LookitupStats"] = function()
+SlashCmdList["LOOKITUPSTATS"] = function()
     dbSavedVariables.showSummary = not dbSavedVariables.showSummary
     if dbSavedVariables.showSummary then
         summaryText:Show()
@@ -850,14 +859,22 @@ SlashCmdList["LookitupStats"] = function()
     end
 end
 
-SlashCmdList["LookitupShow"] = function()
-    frame:Show()
-    print("|cffe6cc80[Lookitup]:|r Frame is now |cff00ff00visible|r.")
+SlashCmdList["LOOKITUPSHOW"] = function()
+    if frame then
+        frame:Show()
+        print("|cffe6cc80[Lookitup]:|r Frame is now |cff00ff00visible|r.")
+    else
+        print("|cffe6cc80[Lookitup]:|r |cffff0000Frame not found.|r")
+    end
 end
 
-SlashCmdList["LookitupHide"] = function()
-    frame:Hide()
-    print("|cffe6cc80[Lookitup]:|r Frame is now |cffff0000hidden|r.")
+SlashCmdList["LOOKITUPHIDE"] = function()
+    if frame then
+        frame:Hide()
+        print("|cffe6cc80[Lookitup]:|r Frame is now |cffff0000hidden|r.")
+    else
+        print("|cffe6cc80[Lookitup]:|r |cffff0000Frame not found.|r")
+    end
 end
 
 -- Load LibDBIcon-1.0

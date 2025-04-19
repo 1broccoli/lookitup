@@ -2,7 +2,7 @@
 ## Title: |cffff8000Lookitup|r
 ## Notes: An addon for managing and searching item and spell IDs.
 ## Author: |cffe6cc80Pegga|r (|cff1eff00Broccoli|r)
-## Version: 2.2
+## Version: 2.3
 ## Website: https://github.com/1broccoli?tab=repositories
 ## SavedVariables: dbSavedVariables
 

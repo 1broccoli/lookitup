@@ -1,0 +1,20 @@
+lightweight tag 946af05cf37e92cdbee44d169bf75bef98d8a20d Lookitup-2.2
+Author:	GitHub <noreply@github.com>
+Date:	Thu Apr 10 21:27:29 2025 -0700
+
+commit 946af05cf37e92cdbee44d169bf75bef98d8a20d
+Author: Broccoli <138363916+1broccoli@users.noreply.github.com>
+Date:   Thu Apr 10 21:27:29 2025 -0700
+
+    Add files via upload
+    
+    updated to include quests for search results, added ACE Library to optimize code. Split Searching between Item ID, Spell ID, and Quest ID to prevent quarry throttling. New DataBase added.
+
+commit cdde41ee83d2f0ba35b61ee8e10a83f2cba3c2c9
+Author: Broccoli <138363916+1broccoli@users.noreply.github.com>
+Date:   Thu Apr 10 21:25:49 2025 -0700
+
+    Update README.md
+    
+    updated image for new feature for searching quests
+
